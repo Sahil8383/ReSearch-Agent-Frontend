@@ -5,6 +5,7 @@ export interface ChatRequest {
   query: string;
   stream?: boolean;
   max_iterations?: number;
+  session_id?: string;
 }
 
 export interface ChatResponse {
@@ -14,6 +15,8 @@ export interface ChatResponse {
   actions_taken: ActionTaken[];
   execution_time_ms: number;
   message?: string;
+  session_id: string;
+  conversation_id: string;
 }
 
 export interface ActionTaken {
@@ -29,6 +32,18 @@ export interface SessionResponse {
   created_at: string;
   updated_at: string;
   conversation_count: number;
+}
+
+export interface ConversationResponse {
+  id: string;
+  query: string;
+  response: string;
+  iterations: number;
+  status: string;
+  actions_taken: ActionTaken[];
+  execution_time_ms: number;
+  created_at: string;
+  session_id: string;
 }
 
 export interface CreateSessionRequest {
@@ -48,6 +63,8 @@ export interface StreamEvent {
   iterations?: number;
   status?: string;
   actions_count?: number;
+  session_id?: string;
+  conversation_id?: string;
 }
 
 export interface ErrorResponse {
@@ -123,6 +140,24 @@ class ApiClient {
     }
   }
 
+  async getAllSessions(userId: string): Promise<SessionResponse[]> {
+    try {
+      const response = await axiosClient.get<SessionResponse[]>(
+        "/api/sessions/",
+        {
+          headers: this.getAuthHeaders(userId),
+        }
+      );
+      return response.data;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError && error.response?.data) {
+        const errorData = error.response.data as ErrorResponse;
+        throw new Error(errorData.message || "Failed to get sessions");
+      }
+      throw error;
+    }
+  }
+
   async deleteSession(sessionId: string, userId: string): Promise<void> {
     try {
       await axiosClient.delete(`/api/sessions/${sessionId}`, {
@@ -137,15 +172,34 @@ class ApiClient {
     }
   }
 
+  async getConversations(
+    sessionId: string,
+    userId: string
+  ): Promise<ConversationResponse[]> {
+    try {
+      const response = await axiosClient.get<ConversationResponse[]>(
+        "/api/conversations/",
+        {
+          params: { session_id: sessionId },
+          headers: this.getAuthHeaders(userId),
+        }
+      );
+      return response.data;
+    } catch (error: unknown) {
+      if (error instanceof AxiosError && error.response?.data) {
+        const errorData = error.response.data as ErrorResponse;
+        throw new Error(errorData.message || "Failed to get conversations");
+      }
+      throw error;
+    }
+  }
+
   async streamChat(
     request: ChatRequest,
     userId: string,
-    sessionId?: string,
     onEvent?: (event: StreamEvent) => void
   ): Promise<void> {
-    const url = `/api/chat/stream${
-      sessionId ? `?session_id=${sessionId}` : ""
-    }`;
+    const url = `/api/chat/stream`;
 
     // Use axios client's baseURL configuration
     const baseURL =

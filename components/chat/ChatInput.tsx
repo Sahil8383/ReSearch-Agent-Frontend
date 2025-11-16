@@ -1,21 +1,24 @@
-'use client';
+"use client";
 
-import React, { useState, useCallback, memo } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Send } from 'lucide-react';
-import { useAppDispatch, useAppSelector } from '@/lib/store/hooks';
-import { addUserMessage } from '@/lib/store/slices/chatSlice';
-import { apiClient } from '@/lib/api';
-import { handleStreamEvent } from '@/lib/store/slices/chatSlice';
-import { useAuth } from '@/contexts/AuthContext';
+import React, { useState, useCallback, memo } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Send } from "lucide-react";
+import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
+import { addUserMessage } from "@/lib/store/slices/chatSlice";
+import { apiClient } from "@/lib/api";
+import { handleStreamEvent } from "@/lib/store/slices/chatSlice";
+import { setCurrentSession } from "@/lib/store/slices/sessionSlice";
+import { useAuth } from "@/contexts/AuthContext";
 
 const ChatInput = memo(() => {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState("");
   const dispatch = useAppDispatch();
   const { userId } = useAuth();
   const isStreaming = useAppSelector((state) => state.chat.isStreaming);
-  const currentSessionId = useAppSelector((state) => state.sessions.currentSessionId);
+  const currentSessionId = useAppSelector(
+    (state) => state.sessions.currentSessionId
+  );
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -23,7 +26,7 @@ const ChatInput = memo(() => {
       if (!query.trim() || isStreaming) return;
 
       const userQuery = query.trim();
-      setQuery('');
+      setQuery("");
       dispatch(addUserMessage(userQuery));
 
       try {
@@ -32,18 +35,24 @@ const ChatInput = memo(() => {
             query: userQuery,
             stream: true,
             max_iterations: 10,
+            session_id: currentSessionId || undefined,
           },
           userId,
-          currentSessionId || undefined,
           (event) => {
             dispatch(handleStreamEvent(event));
+            // If we receive a session_id in the event, update the current session
+            // This handles cases where a new session is created automatically
+            if (event.session_id && event.session_id !== currentSessionId) {
+              dispatch(setCurrentSession(event.session_id));
+            }
           }
         );
       } catch (error) {
         dispatch(
           handleStreamEvent({
-            type: 'error',
-            message: error instanceof Error ? error.message : 'An error occurred',
+            type: "error",
+            message:
+              error instanceof Error ? error.message : "An error occurred",
           })
         );
       }
@@ -67,7 +76,6 @@ const ChatInput = memo(() => {
   );
 });
 
-ChatInput.displayName = 'ChatInput';
+ChatInput.displayName = "ChatInput";
 
 export default ChatInput;
-

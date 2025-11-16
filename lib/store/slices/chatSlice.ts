@@ -1,5 +1,10 @@
-import { createSlice, PayloadAction } from "@reduxjs/toolkit";
-import { StreamEvent, ActionTaken } from "../../api";
+import { createSlice, PayloadAction, createAsyncThunk } from "@reduxjs/toolkit";
+import {
+  StreamEvent,
+  ActionTaken,
+  ConversationResponse,
+  apiClient,
+} from "../../api";
 
 export interface ChatMessage {
   id: string;
@@ -23,6 +28,7 @@ interface ChatState {
     type: string;
     query: string;
   } | null;
+  lastSessionId: string | null;
 }
 
 const initialState: ChatState = {
@@ -34,7 +40,73 @@ const initialState: ChatState = {
   actions: [],
   error: null,
   currentAction: null,
+  lastSessionId: null,
 };
+
+// Helper function to convert ConversationResponse to ChatMessage[]
+const convertConversationsToMessages = (
+  conversations: ConversationResponse[]
+): ChatMessage[] => {
+  const messages: ChatMessage[] = [];
+
+  // Sort conversations by created_at (oldest first) to maintain chronological order
+  const sortedConversations = [...conversations].sort(
+    (a, b) =>
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
+
+  for (const conv of sortedConversations) {
+    // Add user query
+    messages.push({
+      id: `conv-${conv.id}-query`,
+      type: "user",
+      content: conv.query,
+      timestamp: new Date(conv.created_at).getTime(),
+    });
+
+    // Add actions and observations from actions_taken
+    for (let i = 0; i < conv.actions_taken.length; i++) {
+      const action = conv.actions_taken[i];
+
+      // Add action
+      messages.push({
+        id: `conv-${conv.id}-action-${i}`,
+        type: "action",
+        content: action.input,
+        timestamp: new Date(action.timestamp).getTime(),
+        actionType: action.type,
+      });
+
+      // Add observation if present
+      if (action.observation) {
+        messages.push({
+          id: `conv-${conv.id}-observation-${i}`,
+          type: "observation",
+          content: action.observation,
+          timestamp: new Date(action.timestamp).getTime(),
+          actionType: action.type,
+        });
+      }
+    }
+
+    // Add agent response
+    messages.push({
+      id: `conv-${conv.id}-response`,
+      type: "agent",
+      content: conv.response,
+      timestamp: new Date(conv.created_at).getTime(),
+    });
+  }
+
+  return messages;
+};
+
+export const fetchConversations = createAsyncThunk(
+  "chat/fetchConversations",
+  async ({ sessionId, userId }: { sessionId: string; userId: string }) => {
+    return await apiClient.getConversations(sessionId, userId);
+  }
+);
 
 const chatSlice = createSlice({
   name: "chat",
@@ -159,6 +231,9 @@ const chatSlice = createSlice({
             });
             state.currentAnswer = "";
           }
+          if (event.session_id) {
+            state.lastSessionId = event.session_id;
+          }
           state.isStreaming = false;
           state.currentIteration = null;
           break;
@@ -212,6 +287,9 @@ const chatSlice = createSlice({
               actionType: state.currentAction.type,
             });
             state.currentAction = null;
+          }
+          if (event.session_id) {
+            state.lastSessionId = event.session_id;
           }
           state.isStreaming = false;
           state.currentIteration = null;
@@ -273,11 +351,32 @@ const chatSlice = createSlice({
       state.error = null;
       state.actions = [];
       state.currentAction = null;
+      state.lastSessionId = null;
     },
     setError: (state, action: PayloadAction<string | null>) => {
       state.error = action.payload;
       state.isStreaming = false;
     },
+    loadConversations: (
+      state,
+      action: PayloadAction<ConversationResponse[]>
+    ) => {
+      state.messages = convertConversationsToMessages(action.payload);
+      state.error = null;
+    },
+  },
+  extraReducers: (builder) => {
+    builder
+      .addCase(fetchConversations.pending, (state) => {
+        state.error = null;
+      })
+      .addCase(fetchConversations.fulfilled, (state, action) => {
+        state.messages = convertConversationsToMessages(action.payload);
+        state.error = null;
+      })
+      .addCase(fetchConversations.rejected, (state, action) => {
+        state.error = action.error.message || "Failed to fetch conversations";
+      });
   },
 });
 
@@ -287,6 +386,7 @@ export const {
   handleStreamEvent,
   clearMessages,
   setError,
+  loadConversations,
 } = chatSlice.actions;
 
 export default chatSlice.reducer;

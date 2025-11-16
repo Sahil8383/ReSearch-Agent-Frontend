@@ -1,16 +1,18 @@
-'use client';
+"use client";
 
-import React, { memo, useCallback } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { useAppDispatch, useAppSelector } from '@/lib/store/hooks';
-import { setCurrentSession } from '@/lib/store/slices/sessionSlice';
-import { deleteSession } from '@/lib/store/slices/sessionSlice';
-import { clearMessages } from '@/lib/store/slices/chatSlice';
-import { Trash2, Plus } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
-import { SessionResponse } from '@/lib/api';
+import React, { memo, useCallback, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
+import {
+  setCurrentSession,
+  deleteSession,
+  fetchAllSessions,
+} from "@/lib/store/slices/sessionSlice";
+import { fetchConversations } from "@/lib/store/slices/chatSlice";
+import { Trash2, Plus } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface SessionListProps {
   onCreateSession: () => void;
@@ -20,20 +22,31 @@ const SessionList = memo(({ onCreateSession }: SessionListProps) => {
   const dispatch = useAppDispatch();
   const { userId } = useAuth();
   const sessions = useAppSelector((state) => state.sessions.sessions);
-  const currentSessionId = useAppSelector((state) => state.sessions.currentSessionId);
+  const currentSessionId = useAppSelector(
+    (state) => state.sessions.currentSessionId
+  );
+  const loading = useAppSelector((state) => state.sessions.loading);
+
+  useEffect(() => {
+    if (userId) {
+      dispatch(fetchAllSessions(userId));
+    }
+  }, [dispatch, userId]);
 
   const handleSelectSession = useCallback(
     (sessionId: string) => {
       dispatch(setCurrentSession(sessionId));
-      dispatch(clearMessages());
+      if (userId) {
+        dispatch(fetchConversations({ sessionId, userId }));
+      }
     },
-    [dispatch]
+    [dispatch, userId]
   );
 
   const handleDeleteSession = useCallback(
     async (e: React.MouseEvent, sessionId: string) => {
       e.stopPropagation();
-      if (confirm('Are you sure you want to delete this session?')) {
+      if (confirm("Are you sure you want to delete this session?")) {
         dispatch(deleteSession({ sessionId, userId }));
       }
     },
@@ -48,10 +61,14 @@ const SessionList = memo(({ onCreateSession }: SessionListProps) => {
           <Plus className="h-4 w-4" />
         </Button>
       </CardHeader>
-      <CardContent className="flex-1 p-0">
+      <CardContent className="flex-1 p-0 overflow-hidden">
         <ScrollArea className="h-full">
           <div className="p-4 space-y-2">
-            {sessions.length === 0 ? (
+            {loading ? (
+              <p className="text-sm text-muted-foreground text-center py-8">
+                Loading sessions...
+              </p>
+            ) : sessions.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">
                 No sessions yet. Create one to get started.
               </p>
@@ -63,8 +80,8 @@ const SessionList = memo(({ onCreateSession }: SessionListProps) => {
                     p-3 rounded-lg border cursor-pointer transition-colors
                     ${
                       currentSessionId === session.id
-                        ? 'bg-primary text-primary-foreground'
-                        : 'hover:bg-accent'
+                        ? "bg-primary text-primary-foreground"
+                        : "hover:bg-accent"
                     }
                   `}
                   onClick={() => handleSelectSession(session.id)}
@@ -97,7 +114,6 @@ const SessionList = memo(({ onCreateSession }: SessionListProps) => {
   );
 });
 
-SessionList.displayName = 'SessionList';
+SessionList.displayName = "SessionList";
 
 export default SessionList;
-
