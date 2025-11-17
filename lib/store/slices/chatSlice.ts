@@ -342,6 +342,11 @@ const chatSlice = createSlice({
           });
           state.currentIteration = null;
           break;
+
+        default:
+          // Ignore unknown event types (e.g., "pause" which has been removed from backend)
+          // This ensures the frontend continues processing other events in the stream
+          break;
       }
     },
     clearMessages: (state) => {

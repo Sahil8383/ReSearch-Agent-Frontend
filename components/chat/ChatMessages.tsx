@@ -6,6 +6,7 @@ import { useAppSelector } from "@/lib/store/hooks";
 import ChatMessage from "./ChatMessage";
 import AgentFlow from "./AgentFlow";
 import { Shimmer } from "@/components/ui/shimmer";
+import { formatMarkdown } from "@/lib/formatting";
 
 const ChatMessages = memo(() => {
   const messages = useAppSelector((state) => state.chat.messages);
@@ -33,7 +34,10 @@ const ChatMessages = memo(() => {
 
         {/* Streaming Answer */}
         {currentAnswer && (
-          <div className="flex gap-3 px-4 py-3">
+          <div
+            key={`streaming-answer-${isStreaming ? "streaming" : "complete"}`}
+            className="flex gap-3 px-4 py-3"
+          >
             <div className="flex-shrink-0">
               <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
                 <svg
@@ -52,10 +56,15 @@ const ChatMessages = memo(() => {
               </div>
             </div>
             <div className="flex-1 max-w-[80%]">
-              <div className="rounded-lg bg-muted px-4 py-2.5">
-                <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                  {currentAnswer}
-                </p>
+              <div className="rounded-lg bg-muted px-4 py-3">
+                <div className="text-sm leading-relaxed">
+                  {/* Apply full formatting when streaming ends, otherwise show as plain text during streaming */}
+                  {isStreaming ? (
+                    <p className="whitespace-pre-wrap">{currentAnswer}</p>
+                  ) : (
+                    formatMarkdown(currentAnswer)
+                  )}
+                </div>
               </div>
             </div>
           </div>

@@ -1,8 +1,16 @@
 "use client";
 
-import React, { memo } from "react";
+import React, { memo, useState } from "react";
 import { ChatMessage as ChatMessageType } from "@/lib/store/slices/chatSlice";
-import { User, Search, Eye, Brain, AlertCircle } from "lucide-react";
+import {
+  User,
+  Search,
+  Eye,
+  Brain,
+  AlertCircle,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatMarkdown, formatObservation } from "@/lib/formatting";
 
@@ -96,14 +104,7 @@ const ChatMessage = memo(({ message }: ChatMessageProps) => {
   }
 
   if (message.type === "observation") {
-    return (
-      <div className="px-4 py-3 border-b border-border/40 bg-muted/20">
-        <div className="flex items-start gap-2">
-          <Eye className="h-3.5 w-3.5 text-muted-foreground mt-0.5 flex-shrink-0" />
-          <div className="flex-1">{formatObservation(message.content)}</div>
-        </div>
-      </div>
-    );
+    return <CollapsibleObservation content={message.content} />;
   }
 
   if (message.type === "error") {
@@ -129,5 +130,84 @@ const ChatMessage = memo(({ message }: ChatMessageProps) => {
 });
 
 ChatMessage.displayName = "ChatMessage";
+
+// Collapsible observation component
+const CollapsibleObservation = memo(({ content }: { content: string }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  // Check if content looks like search results (has numbered format)
+  const isSearchResults = /^\d+\.\s+\*\*/.test(content.trim());
+
+  // For search results, show first result as preview, otherwise use character limit
+  const getPreview = () => {
+    if (isSearchResults) {
+      // For search results, show first result only
+      const lines = content.split("\n");
+      const firstResultEnd = lines.findIndex(
+        (line, idx) => idx > 0 && /^\d+\.\s+\*\*/.test(line.trim())
+      );
+      if (firstResultEnd > 0) {
+        return lines.slice(0, firstResultEnd).join("\n");
+      }
+      // If only one result, show first 200 chars
+      if (content.length > 200) {
+        return content.slice(0, 200) + "...";
+      }
+      return content;
+    }
+    // For regular observations, use first line or 200 chars
+    const firstLine = content.split("\n")[0];
+    if (firstLine.length <= 200) return firstLine;
+    return firstLine.slice(0, 200) + "...";
+  };
+
+  const preview = getPreview();
+  const hasMoreContent =
+    content.length > preview.length ||
+    (isSearchResults &&
+      content.split("\n").filter((l) => /^\d+\.\s+\*\*/.test(l.trim())).length >
+        1);
+
+  return (
+    <div className="px-4 py-3 border-b border-border/40 bg-muted/20">
+      <div className="flex items-start gap-2">
+        <Eye className="h-3.5 w-3.5 text-muted-foreground mt-0.5 flex-shrink-0" />
+        <div className="flex-1 min-w-0">
+          {!isExpanded && hasMoreContent ? (
+            <div>
+              <div className="text-sm text-muted-foreground leading-relaxed">
+                {formatObservation(preview)}
+              </div>
+              <button
+                onClick={() => setIsExpanded(true)}
+                className="mt-2 flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+              >
+                <ChevronDown className="h-3.5 w-3.5" />
+                {isSearchResults ? "Show all results" : "Show more"}
+              </button>
+            </div>
+          ) : (
+            <div>
+              <div className="text-sm text-muted-foreground leading-relaxed">
+                {formatObservation(content)}
+              </div>
+              {hasMoreContent && (
+                <button
+                  onClick={() => setIsExpanded(false)}
+                  className="mt-2 flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+                >
+                  <ChevronUp className="h-3.5 w-3.5" />
+                  Show less
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+});
+
+CollapsibleObservation.displayName = "CollapsibleObservation";
 
 export default ChatMessage;
